@@ -1,0 +1,77 @@
+import "Core/std.lng";
+import "globals.lng";
+
+ret_rel_ptr::fn macro(var : _expr, type : _expr)
+{
+	cast(*type)(cast(s64)&var + var)
+}
+
+IsButtonUp::fn(key : u32) ! bool
+{
+	if (*globals.jstick.buttons[cast(u64)key] & BUTTON_UP) != 0
+		return true;
+
+	return false;
+}
+IsButtonDown::fn(key : u32) ! bool
+{
+	if (*globals.jstick.buttons[cast(u64)key] & BUTTON_DOWN) != 0
+		return true;
+
+	return false;
+}
+IsButtonPressed::fn(key : u32) ! bool
+{
+	if (*globals.jstick.buttons[cast(u64)key] & BUTTON_PRESSED) != 0
+		return true;
+
+	return false;
+}
+sequence : struct
+{
+	button   : u8,
+	flags    : u32,
+
+	idx : u64,
+	branches : dyn_array(*sequence),
+}
+sequence_man : struct
+{
+	first_seq : dyn_array(*sequence);
+	seqs      : []sequence,
+	cur_seq   : *dyn_array(*sequence),
+	timer     : f32,
+}
+
+UpdateSeqMan::fn(seq_man : *sequence_man, dt : f32)
+{
+	if seq_man.cur_seq == nil
+		seq_man.cur_seq = &seq_man.first_seq;
+
+	i:u64=0;
+
+	while i < 4 && seq_man.cur_seq.len > 0
+	{
+		s := *seq_man.cur_seq[i];
+		if s != nil && s.flags != 0
+		{
+			if IsButtonDown(s.button) == true
+			{
+				seq_man.cur_seq = &s.branches;
+				seq_man.timer   = 0.0;
+
+				print("worked after! %\n", cast(s32)s.button);
+				return;
+			}
+		}
+		i+=1;
+	}
+
+	seq_man.timer += dt;
+
+	if seq_man.timer > 1.0
+	{
+		seq_man.timer   = 0.0;
+		seq_man.cur_seq = nil;
+	}
+}

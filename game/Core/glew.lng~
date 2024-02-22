@@ -1,0 +1,26 @@
+import_lib "game/glew32s.lib";
+glewInit ::fn() ! u8;
+
+GLEW_OK : const s32 = 0;
+
+glGenBuffers       :: fn link_name "__glewGenBuffers"(u32, *u32) ! u8;
+glGenVertexArrays  :: fn link_name "__glewGenVertexArrays"(u32, *u32) ! u8;
+glBindBuffer       :: fn link_name "__glewBindBuffer"(u32, u32) ! u8;
+glBindVertexArray :: fn link_name "__glewBindVertexArray"(u32) ! u8;
+glBufferData       :: fn link_name "__glewBufferData"(u32, u32, *u32, u32) ! u8;
+glVertexAttribPointer     :: fn link_name "__glewVertexAttribPointer"(u32, u32, u32, u32, u32, *u32) ! u8;
+glEnableVertexAttribArray :: fn link_name "__glewEnableVertexAttribArray"(u32)!u8;
+glCreateProgram ::fn link_name "__glewCreateProgram"() ! u32;
+glCreateShader  ::fn link_name "__glewCreateShader" (u32) ! u32;
+glShaderSource  ::fn link_name "__glewShaderSource" (u32, u32, **u8, *u8);
+glCompileShader ::fn link_name "__glewCompileShader"(u32);
+glAttachShader  ::fn link_name "__glewAttachShader" (u32, u32);
+glLinkProgram   ::fn link_name "__glewLinkProgram" (u32);
+glValidateProgram ::fn link_name "__glewValidateProgram" (u32);
+glDeleteShader    ::fn link_name "__glewDeleteShader" (u32);
+glUseProgram      ::fn link_name "__glewUseProgram" (u32);
+glGetUniformLocation ::fn link_name "__glewGetUniformLocation" (u32, *u8) ! u32;
+glUniform4f          ::fn link_name "__glewUniform4f" (u32, f32, f32, f32, f32);
+glUniformMatrix4fv   ::fn link_name "__glewUniformMatrix4fv"(u32, u32, u32, *f32);
+glGetShaderiv      ::fn link_name "__glewGetShaderiv"(u32, u32, *u32);
+glGetShaderInfoLog ::fn link_name "__glewGetShaderInfoLog"(u32, u32, *u32, *u8);

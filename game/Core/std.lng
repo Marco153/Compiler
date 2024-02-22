@@ -1,0 +1,573 @@
+import "Core/crt.lng";
+import "Core/glfw.lng";
+import "Core/win32.lng" as win32;
+import "globals.lng";
+
+
+
+is_flag_on::fn macro(val : _expr, flag : _expr)
+{
+	((val & flag) != 0)
+}
+
+ptr_offset::fn macro(ptr : _expr, offset : _expr, type : _expr)
+{
+	cast(*type)(cast(u64)ptr + (offset) * sizeof(type))
+}
+make_rel_ptr::fn{T}(var : *T, ptr_dst : s64)
+{
+	*var = cast(T)(cast(s64)ptr_dst - cast(s64)var);
+}
+
+array : struct(T)
+{
+	data : *T,
+	len  : u64,
+}
+dyn_array : struct(T)
+{
+	data : *T,
+	len  : u64,
+	cap  : u64,
+}
+init_ar_sys:: fn{T}(ar : *array(T), len : u64, sys : sub_system_enum)
+{
+	ar.data = cast(*T)GetSubSysData(sys, len * sizeof(T));
+	ar.len  = len;
+}
+init_ar_dyn:: fn{T}(dyn : *dyn_array(T), cap : u64)
+{
+	dyn.data = cast(*T)malloc(cap * sizeof(T));
+	dyn.len  = 0;
+	dyn.cap  = cap;
+}
+add_dyn::fn{T}(dyn : *dyn_array(T), data : *T)
+{
+	ASSERT(dyn.cap > 0);
+
+	if dyn.len >= dyn.cap
+	{
+		aux_data := dyn.data;
+		dyn.cap = dyn.cap * 2;
+		dyn.data = malloc(dyn.cap * sizeof(T));
+		memcpy(cast(*void)dyn.data, cast(*void)aux_data, dyn.len * sizeof(T));
+	}
+	
+	dst:= cast(*void)(cast(u64)dyn.data + dyn.len * sizeof(T));
+	memcpy(dst, cast(*void)data, sizeof(T));
+
+	dyn.len += 1;
+}
+operator []{T}(self : *dyn_array(T), idx : u64) ! *T
+{
+	return cast(*T)(cast(u64)self.data + sizeof(T) * idx);
+}
+
+string : struct
+{
+	data : *u8,
+	len  : u64,
+}
+operator ==(lhs : *string, rhs : *string) ! bool
+{
+	if lhs.len != rhs.len
+		return false;
+
+	i:u64= 0;
+
+	while i < lhs.len
+	{
+		l_u8 := *ptr_offset(lhs.data, i, u8);
+		r_u8 := *ptr_offset(rhs.data, i, u8);
+
+		if l_u8 != r_u8
+			return false;
+		i+=1;
+	}
+	return true;
+}
+operator ==(self : *string, lit : str_lit) ! bool
+{
+	slen := str_ln(lit);
+	if self.len != slen
+		return false;
+
+	i:u64= 0;
+
+	while i < slen
+	{
+		l_u8 := *ptr_offset(self.data, i, u8);
+		r_u8 := *ptr_offset(lit, i, u8);
+
+		if l_u8 != r_u8
+			return false;
+		i+=1;
+	}
+	return true;
+}
+
+__h :*u8;
+
+import "main.lng";
+
+entry :: fn(argc : u32, argv : *u8)
+{
+	__h = win32.GetStdHandle(win32.STD_OUTPUT_HANDLE);
+	args : [2]string;
+	main(args);
+}
+
+str_ln:: fn(str : *u8) ! u64
+{
+	i :u64= 0;
+	ch := *str;
+	while ch != 0
+	{
+		i += 1;
+		ch = *cast(*u8)(cast(u64)str + i);
+	}
+	return i;
+}
+
+operator []{T, U}(self : *rel_array(T, U), idx : u64) ! *U
+{
+	return cast(*U)(cast(u64)*self.data + sizeof(U) * idx);
+}
+operator []{T}(self : *array(T), idx : u64) ! *T
+{
+	return ptr_offset(self.data, idx, T);// cast(*T)(cast(u64)self.data + sizeof(T) * idx);
+}
+
+operator =(self : *array(u8), str : str_lit)
+{
+	self.data = cast(*u8)str;
+	self.len  = str_ln(str);
+}
+fn constructor(str : str_lit) ! array(u8)
+{
+	ret : array(u8);
+	ptr := cast(*u8)str;
+	ret.data = ptr;
+	ret.len  = str_ln(ptr);
+	return ret;
+}
+
+
+// rel ptr
+rel_ptr : struct (T, U)
+{
+	offset : T,
+}
+
+operator ={T, U}(self : *rel_ptr(T, U), rhs : *U)
+{
+	*cast(*T)self = cast(T)(cast(s64)rhs - cast(s64)self);
+}
+operator deref{T, U}(self : *rel_ptr(T, U)) ! *U
+{
+	return cast (*U)(cast(s64)(self) + cast(s64)(*cast(*T)self));
+}
+
+rel_array : struct (T, U)
+{
+	data : rel_ptr(T, U),
+	len  : T,
+}
+
+
+operator for{T}(self : *array(T)) ! iterator(T)
+{
+	ret_it : iterator(T);
+	ret_it.start = self.data;
+
+	data_int := cast(u64)self.data;
+	sz_bytes := cast(u64)(self.len * sizeof(T));
+
+	ret_it.end   = cast(*T)(data_int + sz_bytes);
+	return ret_it;
+}
+
+operator for{T, U}(self : *rel_array(T, U)) ! iterator(U)
+{
+	ret_it : iterator(U);
+	ret_it.start = *self.data;
+	ret_it.end   = cast(*U)(cast(u64)*self.data + cast(u64)(self.len * sizeof(U)));
+	return ret_it;
+}
+
+
+type_enum : enum
+{
+
+	TYPE_AUTO,
+	TYPE_ARRAY_TYPE,
+	TYPE_STATIC_ARRAY,
+	TYPE_ARRAY,
+	TYPE_ARRAY_DYN,
+
+	TYPE_ENUM_IDX_32,
+
+	TYPE_OVERLOADED_FUNCS,
+
+	TYPE_VOID,
+	TYPE_VOID_TYPE,
+
+	TYPE_RANGE,
+
+	TYPE_STRUCT_TYPE,
+	TYPE_STATIC_ARRAY_TYPE,
+	TYPE_U64_TYPE,
+	TYPE_U32_TYPE,
+	TYPE_U16_TYPE,
+	TYPE_U8_TYPE,
+	TYPE_S64_TYPE,
+	TYPE_S32_TYPE,
+	TYPE_S16_TYPE,
+	TYPE_S8_TYPE,
+	TYPE_BOOL_TYPE,
+	TYPE_UNION_TYPE,
+	TYPE_FUNC_TYPE,
+	TYPE_ENUM_TYPE,
+	TYPE_F32_TYPE,
+	TYPE_F64_TYPE,
+	TYPE_CHAR_TYPE,
+
+	TYPE_INT,
+
+	TYPE_IMPORT,
+	TYPE_STR_LIT,
+
+	TYPE_REL_TYPE,
+	TYPE_REL,
+
+	TYPE_U64,
+	TYPE_U32,
+	TYPE_U16,
+	TYPE_U8,
+	TYPE_S64,
+	TYPE_S32,
+	TYPE_S16,
+	TYPE_S8,
+	TYPE_F32,
+	TYPE_F64,
+	TYPE_BOOL,
+	TYPE_CHAR,
+
+	TYPE_UNION_DECL,
+	TYPE_UNION,
+
+	TYPE_ENUM_DECL,
+	TYPE_ENUM,
+
+	TYPE_STRUCT_DECL,
+	TYPE_STRUCT,
+	TYPE_STRUCT_ANON,
+	TYPE_BUILT_IN_MACRO,
+	TYPE_FUNC_DECL,
+	TYPE_FUNC_PTR,
+	TYPE_FUNC_DEF,
+	TYPE_FUNC_EXTERN,
+	TYPE_FUNC,
+	TYPE_COMMA,
+	TYPE_TEMPLATE,
+}
+type_data : struct
+{
+	u : union
+	{
+		ar : rel_array(s32, type_data),
+	}
+	using info : u,
+	tp : type_enum,
+	name : u16,
+	name_len : u16,
+}
+var_arg :struct
+{
+	val : u64, 
+	ptr : u8, 
+	using tdata : *type_data
+}
+new_var_arg :: fn(val : u64, ptr : u8, tdata : *type_data) ! var_arg
+{
+	ret : var_arg;
+	ret.val = val;
+	ret.ptr = ptr;
+	ret.tdata = tdata;
+	return ret;
+}
+
+
+iterator : struct (T)
+{
+	start : *T,
+	end   : *T,
+}
+
+
+it_next ::fn{T}(self : *iterator(T)) ! *T
+{
+	if cast(u64)self.start < cast(u64)self.end
+	{
+		ret := self.start;
+		self.start = cast(*T)(cast(u64)self.start + sizeof(T));
+		return ret;
+	}
+	else
+		return cast(*T)0;
+	return cast(*T)0;
+}
+it_init:: fn{T}(self : *iterator(T), ar : *[]T)
+{
+	self.start = ar.data;
+	self.end   = cast(*T)(cast(u64)(self.start) + sizeof(T) * ar.len);
+}
+str_lit_2_array::fn(str : str_lit) ! array(u8)
+{
+	ret : array(u8);
+	len := str_ln(str);
+	ret.data = cast(*u8)str;
+	ret.len  = len;
+
+	return ret;
+}
+is_number::fn(ch : char) ! bool
+{
+	ret :bool;
+	ret = (ch >= '0 && ch <= '9);
+
+	return ret;
+}
+is_letter::fn(ch : char) ! bool
+{
+	ret :bool;
+	ret = (ch >= 'A && ch <= 'Z) || (ch >= 'a && ch <= 'z);
+
+	return ret;
+}
+slice_array::fn{T}(data : *T, len: u64, start : u64, end : u64) ! array(T)
+{
+	ret : array(T);
+	ret.data = cast(*T)(cast(u64)data + start * sizeof(T));
+	ret.len  = end - start;
+
+	return ret;
+}
+
+str_2_num::fn(str : *[]u8) ! s64
+{
+	ret : s64;
+	i:s64 = cast(s64)(str.len - 1);
+	
+	if *str[cast(u64)i] == '0 && str.len == 0
+		return 0;
+
+	ret = cast(s64)(cast(u8)*str[cast(u64)i] - cast(u8)'0);
+
+	i -= 1;
+
+	ten_base:= 10;
+
+	while i >= 0
+	{
+		aux := ten_base * cast(s32)(cast(u8)*str[cast(u64)i] - cast(u8)'0);
+
+		ret += aux;
+		ten_base = ten_base * ten_base;
+		i-=1;
+	}
+	return ret;
+}
+num_2_strX::fn(num : s64, buffer : *[]u8) ! u64
+{
+	written :u64= 0;
+
+	if num == 0
+	{
+		*buffer[0] = '0;
+		return 1;
+	}
+
+	aux :[16]u8;
+	while num != 0
+	{
+		mod := num % 16;
+
+		if mod < 10
+			*aux[written] = cast(u8)'0 + cast(u8)mod;
+		else
+			*aux[written] = cast(u8)'7 + cast(u8)mod;
+
+		num = num / 16;
+		written += 1;
+	}
+	
+
+	aux_written := cast(s32)written - 1;
+	*buffer[0] = '0;
+	*buffer[1] = 'x;
+
+	i :u64= 2;
+
+	while aux_written >= 0
+	{
+		*buffer[i] = *aux[cast(u64)aux_written];
+
+		i += 1;
+		aux_written -= 1;
+	}
+	
+	// accounting for the 0x
+	written += 2;
+
+	return written;
+}
+num_2_str_signed::fn(num : s64, buffer : *[]u8, sz : u8) ! u64
+{
+	written :u64= 0;
+
+	if num == 0
+	{
+		*buffer[0] = '0;
+		return 1;
+	}
+
+
+	is_negative := false;
+
+	num_u :u64;
+
+	if sz == 1
+	{
+		is_negative = (num & 0x80) != 0;
+	}
+	else if sz == 2
+	{
+		is_negative = (num & 0x8000) != 0;
+	}
+	else if sz == 4
+	{
+		is_negative = (num & 0x8000_0000) != 0;
+		num_u = cast(u64)~cast(s32)(num);
+	}
+	else if sz == 8
+	{
+		is_negative = (num & 0x8000_0000_0000_0000) != 0;
+	}
+
+	if is_negative
+	{
+		written = 1;
+		*buffer[0] = '-;
+		num = cast(s64)num_u;
+	}
+	
+	aux_buffer :[32]u8;
+
+	i :s64= 0;
+	
+	while num != 0
+	{
+		mod := num % 10;
+		*aux_buffer[cast(u64)i] = cast(u8)'0 + cast(u8)mod;
+		num = num / 10;
+		i += 1;
+	}
+	while i > 0
+	{
+		idx := i - 1;
+		*buffer[written] = *aux_buffer[cast(u64)idx];
+		i -= 1;
+		written += 1;
+	}
+
+	return written;
+}
+num_2_str::fn(num : s64, buffer : *[]u8) ! u64
+{
+	i :u64= 0;
+	written :u64= 0;
+
+	if num == 0
+	{
+		*buffer[0] = '0;
+		return 1;
+	}
+
+
+	while num != 0
+	{
+		mod := num % 10;
+		*buffer[written] = cast(u8)'0 + cast(u8)mod;
+		num = num / 10;
+		written += 1;
+	}
+	return written;
+}
+
+print :: fn(str : []u8, ...)
+{
+	ar := cast(*rel_array(s64, *var_arg)) GET_VAR_ARGS_OFFSET();
+
+	buffer :[256]u8;
+
+	cur_arg :u64= 0;
+
+	i   :u64= 0;
+	b_i :u64= 0;
+
+	while i < str.len
+	{
+		if *str[i] != '%
+		{
+			*buffer[b_i] = *str[i];
+			b_i += 1;
+		}
+		else
+		{
+			is_hex := *str[i + 1] == 'x;
+
+			arg := ar[cur_arg];
+			if arg.tp == s32 || arg.tp == bool
+
+			{
+				if is_hex
+				{
+					b_i += num_2_strX(cast(s64)arg.val, &buffer[i..]);
+					i += 1;
+				}
+				else
+					b_i += num_2_str_signed(cast(s64)arg.val, &buffer[i..], 4);
+
+				i += 1;
+
+				cur_arg += 1;
+				continue;
+
+			}
+			else if arg.tp == str_lit
+			{
+				ln := str_ln(cast(*u8)arg.val);
+				memcpy(cast(*void) buffer[b_i], cast(*void)arg.val, ln);
+				b_i += ln;
+				cur_arg += 1;
+
+			}
+		}
+		i += 1;
+	}
+	win32.WriteFile(__h, buffer, b_i, &i, 0);
+}
+_own_memset::fn(dst : *void, val : u8, sz : u64)
+{
+	i :u64;
+	while i < sz
+	{
+		*cast(*u8)((cast(u64)dst) + i) = val;
+		i+=1;
+	}
+}
+
+
+get_type_data :: fn internal(s : u64) ! *type_data;
+GET_VAR_ARGS_OFFSET :: fn internal() ! *u64;

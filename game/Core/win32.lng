@@ -1,0 +1,12 @@
+import_lib "kernel32.lib";
+
+GetStdHandle :: fn outsider(s32) ! *u8;
+WriteFile    :: fn outsider(*u8, *u8, u64, *u64, u64) ! s32;
+VirtualAlloc :: fn outsider(*u8, u64, u64, u64) ! *u8;
+
+STD_OUTPUT_HANDLE : const s32 = -11;
+MEM_COMMIT :const s32=0x00001000;
+
+PAGE_EXECUTE      :const s32=0x10;
+PAGE_EXECUTE_READ      :const s32= 0x20;
+PAGE_EXECUTE_READWRITE :const s32=0x40;

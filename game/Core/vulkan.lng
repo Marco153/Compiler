@@ -1,0 +1,46 @@
+import_lib "../vulkan-1.lib";
+
+VkStructureType : enum
+{
+	VK_STRUCTURE_TYPE_APPLICATION_INFO = 0,
+	VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO = 1,
+}
+VkExtensionProperties : struct
+{
+	extensionName: [256]u8;
+	specVersion: u32;
+}
+VkApplicationInfo : struct
+{
+    sType:             VkStructureType,    
+    pNext:             *void,        
+    pApplicationName:  *u8,        
+    applicationVersion:u32,           
+    pEngineName:       *u8,        
+    engineVersion:     u32,           
+    apiVersion:        u32,           
+}
+
+VkInstanceCreateInfo : struct
+{
+    sType:                   VkStructureType,
+    pNext:                   *void,                 
+    flags:                   u32,
+    pApplicationInfo:        *VkApplicationInfo,
+    enabledLayerCount:       u32,                    
+    ppEnabledLayerNames:     *u8,
+    enabledExtensionCount:   u32,                    
+    ppEnabledExtensionNames: **u8,          
+} 
+
+vkEnumerateInstanceExtensionProperties::fn(
+    pLayerName    : *u8,
+    pPropertyCount:*u32,
+    pProperties:*VkExtensionProperties)!u32;
+
+vkCreateInstance :: fn(
+    pCreateInfo: *VkInstanceCreateInfo,
+    pAllocator: *u8,
+	//VkInstance
+    pInstance: *u64
+) !u32 ;

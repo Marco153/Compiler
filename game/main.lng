@@ -1,0 +1,600 @@
+import "Core/std.lng";
+import "Core/gl.lng";
+import "Core/glfw.lng";
+import "Core/glew.lng";
+import "Core/math.lng";
+import "Core/win32.lng" as win32;
+import "Core/crt.lng";
+import "entity.lng";
+import "globals.lng";
+import "vector.lng";
+import "collision.lng";
+import "input.lng";
+
+B_CIRCLE:const s32= GLFW_GAMEPAD_BUTTON_CIRCLE;
+B_CROSS :const s32= GLFW_GAMEPAD_BUTTON_SQUARE;
+B_SQUARE   :const s32= GLFW_GAMEPAD_BUTTON_TRIANGLE;
+B_TRIANGLE :const s32= GLFW_GAMEPAD_BUTTON_CROSS;
+B_LEFT     :const s32= GLFW_GAMEPAD_BUTTON_DPAD_LEFT;
+B_RIGHT    :const s32= GLFW_GAMEPAD_BUTTON_DPAD_RIGHT;
+B_DOWN     :const s32= GLFW_GAMEPAD_BUTTON_DPAD_DOWN;
+B_UP       :const s32= GLFW_GAMEPAD_BUTTON_DPAD_UP;
+B_L1       :const s32= GLFW_GAMEPAD_BUTTON_LEFT_BUMPER;
+B_R1       :const s32= GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER;
+B_L2       :const s32= GLFW_GAMEPAD_BUTTON_BACK;
+B_R2       :const s32= GLFW_GAMEPAD_BUTTON_START;
+
+
+JoystickCallback::fn(jid : u32, event : u32)
+{
+	__dbg_break;
+}
+KeyCallback::fn(*u8, key : u32, scan_code : u32, action : u32, u32)
+{
+	val := globals.keys[cast(u64)key]; 
+
+	if action == GLFW_PRESS
+		*val = 1;
+	else if action == GLFW_RELEASE
+		*val = 0;
+}
+
+
+
+GetAxis::fn(axis : u8) ! f32
+{
+	return *globals.jstick.axes[cast(u64)axis];
+}
+IsKeyPressed::fn(key : u32) ! bool
+{
+	if *globals.keys[cast(u64)key] == 1
+		return true;
+
+	return false;
+	
+}
+MakeButtonLogic::fn(bt : *u8, pressed : bool)
+{
+	if pressed
+	{
+		if (*bt & BUTTON_PRESSED) == 0
+			*bt = *bt | BUTTON_DOWN;
+
+		*bt = *bt | BUTTON_PRESSED;
+	}
+	else
+	{
+		new_flags :u8;
+		if (*bt & BUTTON_PRESSED) != 0
+		{
+			new_flags = BUTTON_UP;
+			//new_flags = new_flags | BUTTON_UP;
+			*bt = new_flags;
+		}
+	}
+}
+
+ProcessJoyInput::fn()
+{
+	len : u32;
+	axes    := glfwGetJoystickAxes(GLFW_JOYSTICK_1, cast(*u32)&len);
+	buttons := glfwGetJoystickButtons(GLFW_JOYSTICK_1, cast(*u32)&len);
+	hats    := glfwGetJoystickHats(GLFW_JOYSTICK_1, cast(*u32)&len);
+	hat_flags := *hats;
+
+
+	if (hat_flags & GLFW_HAT_RIGHT) != 0
+		MakeButtonLogic(globals.jstick.buttons[B_RIGHT], true);
+	else
+		MakeButtonLogic(globals.jstick.buttons[B_RIGHT], false);
+
+	if (hat_flags & GLFW_HAT_LEFT) != 0
+		MakeButtonLogic(globals.jstick.buttons[B_LEFT], true);
+	else
+		MakeButtonLogic(globals.jstick.buttons[B_LEFT], false);
+
+	if (hat_flags & GLFW_HAT_UP) != 0
+		MakeButtonLogic(globals.jstick.buttons[B_UP], true);
+	else
+		MakeButtonLogic(globals.jstick.buttons[B_UP], false);
+
+	if (hat_flags & GLFW_HAT_DOWN) != 0
+		MakeButtonLogic(globals.jstick.buttons[B_DOWN], true);
+	else
+		MakeButtonLogic(globals.jstick.buttons[B_DOWN], false);
+
+	circle := *ptr_offset(buttons, B_CIRCLE, u8);
+	cross  := *ptr_offset(buttons, B_CROSS, u8);
+	sq     := *ptr_offset(buttons, B_SQUARE, u8);
+	tr     := *ptr_offset(buttons, B_TRIANGLE, u8);
+
+	l1 := *ptr_offset(buttons, GLFW_GAMEPAD_BUTTON_LEFT_BUMPER, u8);
+	r1 := *ptr_offset(buttons, GLFW_GAMEPAD_BUTTON_RIGHT_BUMPER, u8);
+	l2 := *ptr_offset(buttons, GLFW_GAMEPAD_BUTTON_BACK, u8);
+	r2 := *ptr_offset(buttons, GLFW_GAMEPAD_BUTTON_START, u8);
+
+	MakeButtonLogic(globals.jstick.buttons[B_CIRCLE  ], cast(bool)circle);
+	MakeButtonLogic(globals.jstick.buttons[B_CROSS   ], cast(bool)cross);
+	MakeButtonLogic(globals.jstick.buttons[B_SQUARE  ], cast(bool)sq);
+	MakeButtonLogic(globals.jstick.buttons[B_TRIANGLE], cast(bool)tr);
+
+	MakeButtonLogic(globals.jstick.buttons[B_L1], cast(bool)l1);
+	MakeButtonLogic(globals.jstick.buttons[B_R1], cast(bool)r1);
+	MakeButtonLogic(globals.jstick.buttons[B_L2], cast(bool)l2);
+	MakeButtonLogic(globals.jstick.buttons[B_R2], cast(bool)r2);
+}
+ClearJoyStick::fn()
+{
+	i:u64;
+	while i < TOTAL_BUTTONS
+	{
+		flags := globals.jstick.buttons[i];
+		
+		*flags = *flags & ~(BUTTON_DOWN | BUTTON_UP);
+
+		i+=1;
+	}
+}
+GetNumFromStr::fn(str : *u8, i : *u64) ! s64
+{
+	len : s64;
+	ch := cast(*char)(cast(u64)str);
+	start := *i;
+	
+	while *ch != ' && *ch != '} && *ch != '{
+
+
+	{
+		ch = cast(*char)(cast(u64)ch + 1);
+		len += 1;
+	}
+
+	*i += cast(u64)len;
+
+	ar :array(u8);
+	ar.data = cast(*u8)(cast(u64)str);
+	ar.len  = cast(u64)len;
+
+
+	return str_2_num(&ar);
+}
+SEQ_ADD:const s32= 128;
+GetButtonFromStr::fn(str : *u8, i : *u64) ! s64
+{
+	len : s64;
+	ch := cast(*char)(cast(u64)str);
+	
+	while *ch != ' && *ch != '}
+
+	{
+		ch = cast(*char)(cast(u64)ch + 1);
+		len += 1;
+	}
+
+	src:string;
+	src.data = str;
+	src.len  = cast(u64)len;
+	*i += cast(u64)len;
+
+	if src == "B_UP"
+		return B_UP;
+
+	else if src == "B_DOWN"
+		return B_DOWN;
+
+	else if src == "B_RIGHT"
+		return B_RIGHT;
+
+	else if src == "B_LEFT"
+		return B_LEFT;
+
+	else if src == "B_CIRCLE"
+		return B_CIRCLE;
+
+	else if src == "B_CROSS"
+		return B_CROSS;
+
+	else if src == "B_SQUARE"
+		return B_SQUARE;
+
+	else if src == "B_TRIANGLE"
+		return B_TRIANGLE;
+
+	else if src == "B_L1"
+		return B_L1;
+
+	else if src == "B_R1"
+		return B_R1;
+
+	else if src == "B_L2"
+		return B_L2;
+
+	else if src == "B_R2"
+		return B_R2;
+
+	else if src == "SEQ_ADD"
+		return SEQ_ADD;
+
+	return -1;
+}
+EatSpace::fn(str : *[]u8, i : *u64)
+{
+	ch := cast(*char)(cast(u64)str[*i]);
+
+	while *ch == ' 
+	{
+		*i += 1;
+		ch = cast(*char)(cast(u64)str[*i]);
+	}
+}
+NewSequence::fn(str : *[]u8, out : *dyn_array(*sequence)) ! u64
+{
+	i : u64;
+
+	cur_seq_idx :u64= 0;
+
+	cur_seq : *sequence;
+
+	while i < str.len
+	{
+		EatSpace(str, &i);
+		ch := cast(*char)(cast(u64)str[i]);
+
+		if *ch == '{
+		{
+			init_ar_dyn(&cur_seq.branches, 16);
+
+			i += 1;
+			i += NewSequence(&str[i..], &cur_seq.branches);
+			i += 1;
+			
+			continue;
+		}
+		else if is_letter(*ch)
+		{
+			a := GetButtonFromStr(str[i], &i);
+			ASSERT(a != -1);
+
+			new_sys := sys_new(sub_system_enum.SEQUENCES, sequence);
+		
+			add_dyn(out, &new_sys);
+
+			cur_seq = *out[cur_seq_idx];
+
+			cur_seq_idx += 1;
+
+
+			cur_seq.flags  = 1;
+			cur_seq.button = cast(u8)a;
+
+			EatSpace(str, &i);
+
+			ch = cast(*char)(cast(u64)str[i]);
+
+			if is_letter(*ch)
+			{
+				a = GetButtonFromStr(str[i], &i);
+				if a == SEQ_ADD
+				{
+					EatSpace(str, &i);
+					
+					idx_to_add := GetNumFromStr(cast(*u8)(cast(u64)str[i]), &i);
+					to_add :*sequence= sys_new(sub_system_enum.SEQUENCES, sequence);
+
+					add_dyn(out, &to_add);
+					
+				}
+				else
+					ASSERT(false); // seq not found
+
+				num := cast(u8)*ch - cast(u8)'0;
+				i += 1;
+			}
+			
+			continue;
+		}
+		else if *ch == '}
+		{
+			return i;
+		}
+		else
+			ASSERT(false);
+
+		i += 1;
+
+	}
+	return i;
+
+}
+PlayerMov :: fn(ent : *entity, dt : *f32)
+{
+	mov     :v3;
+	jmp     :v3;
+
+	gmp := cast(*gameplay_strct)ent.data;
+
+	on_ground := (ent.col.flags & COL_FLAGS_ON_GROUND) != 0 && (ent.col.flags & COL_FLAGS_HAD_COLLISION) != 0;
+	is_jmping := gmp.state == player_state.JUMPING;
+
+	grav_speed := -35.0;
+
+
+	// we will only have gravity when we're at the end of the jump or jsut falling
+	if !on_ground && !gmp.is_jumping
+		gmp.gravity.y += grav_speed * *dt;
+	else
+	{
+		// we still want to maintain a little bit of gravity so that we can still be
+		// in contact with the ground
+		gmp.gravity.y = -1.0;
+	}
+
+	if on_ground
+	{
+		gmp.gravity_timer.timer = 0.0;
+		gmp.jmp_timer.timer     = 0.0;
+		gmp.time_off_the_ground = 0.0;
+	}
+	else
+	{
+		gmp.time_off_the_ground += *dt;
+	}
+
+	
+	if gmp.gravity.y <= -20.0
+		gmp.gravity.y = -20.0;
+
+	speed:= 5.0;
+
+	if (IsKeyPressed(GLFW_KEY_W) || IsButtonPressed(B_UP))
+		mov.y = speed;
+
+	if IsKeyPressed(GLFW_KEY_S) || IsButtonPressed(B_DOWN)
+		mov.y = -speed;
+	else
+		mov.y = 0.0;
+
+	if IsKeyPressed(GLFW_KEY_A) || IsButtonPressed(B_LEFT)
+	{
+		mov.x = -speed;
+		ent.forward.x = -1.0;
+	}
+	else if IsKeyPressed(GLFW_KEY_D) || IsButtonPressed(B_RIGHT)
+	{
+		mov.x = speed;
+		ent.forward.x = 1.0;
+	}
+	else
+		mov.x = 0.0;
+	
+	allow_jump_off_the_ground := !on_ground && gmp.time_off_the_ground < 0.15;
+	// jumping
+	if (IsKeyPressed(GLFW_KEY_SPACE) || IsButtonDown(B_CROSS)) && (on_ground || allow_jump_off_the_ground)
+	{
+		gmp.state = player_state.JUMPING;
+		gmp.is_jumping = true;
+	}
+	// cancalling jumping
+	if !IsButtonPressed(B_CROSS) && gmp.is_jumping && gmp.jmp_timer.timer > 0.1
+	{
+		print("%\n", on_ground);
+		gmp.is_jumping = false;
+	}
+
+	// attacking
+	if IsKeyPressed(GLFW_KEY_E) || IsButtonDown(B_SQUARE)
+	{
+		gmp.is_attacking = true;
+	}
+
+	if gmp.state == player_state.IDLE
+	{
+	}
+	else if gmp.state == player_state.WALKING
+	{
+	}
+
+	if gmp.is_attacking
+	{
+		using gmp;
+		p :f32;
+
+		if UpdateTimerGetPercent(&attack_timer, *dt, &p)
+		{
+			
+			attack_ent.flags = attack_ent.flags & ~ENT_FLAGS_INACTIVE;
+			dir:v3;
+			dir.x = ent.forward.x * 1.0;
+			SUM_V3(attack_ent.pos, ent.pos, dir);
+		}
+		else
+		{
+			attack_ent.flags = attack_ent.flags | ENT_FLAGS_INACTIVE;
+			attack_timer.timer = 0.0;
+			is_attacking = false;
+		}
+	}
+	if gmp.is_jumping
+	{
+		p :f32;
+
+		if UpdateTimerGetPercent(&gmp.jmp_timer, *dt, &p)
+		{
+			p2 := cosf(p * (PI / 2.0));
+			jmp.y = p2 * gmp.jmp_speed;
+		}
+		else
+		{
+			gmp.jmp_timer.timer = 0.0;
+			gmp.is_jumping = false;
+		}
+	}
+
+
+	
+
+	SUM_V3(ent.vel, gmp.gravity, mov);
+	SUM_V3(ent.vel, ent.vel, jmp);
+}
+	
+
+main :: fn(args : *[]string) ! u8
+{
+	cam_size = 10.0;
+	PI = 3.14159256;
+	glfwGetVersionString();
+
+	glfwInit();
+
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+	glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+	glfwWindowHint(GLFW_OPENGL_CORE_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+	wnd := glfwCreateWindow(860, 640, "glfw", nil, nil);
+
+	screen_ratio = 640.0 / 860.0;
+	
+
+	glfwMakeContextCurrent(wnd);
+	glfwSwapInterval(1);
+
+	is_present := glfwJoystickPresent(GLFW_JOYSTICK_1);
+
+	ASSERT(is_present);
+
+
+
+	glewInit();
+
+	vao:u32;
+	
+	GL_CALL(glGenVertexArrays(1, &vao));
+	GL_CALL(glBindVertexArray(vao));
+
+
+	InitSubSystems();
+
+	seqs := "B_UP SEQ_ADD 0 {B_CIRCLE} B_DOWN {B_UP}";
+	
+	seq_man :sequence_man;
+
+	init_ar_dyn(&seq_man.first_seq, 16);
+
+	NewSequence(&seqs[..], &seq_man.first_seq);
+
+
+
+	ASSERT(seq_man.first_seq[0].button == B_UP);
+	ASSERT(seq_man.first_seq[0].branches[0].button == B_CIRCLE);
+
+	ent_man_sz :u64= 64;
+	ent_man.max_ents = ent_man_sz;
+	ent_man.entities.data = cast(*entity)globals.sub_systems[cast(u64)sub_system_enum.ENTITIES].data;
+	ent_man.entities.len  = ent_man_sz;
+
+	positions := $(-0.5, -0.5, 0.0,
+				    0.5, -0.5, 0.0,
+				    0.5,  0.5, 0.0,
+				   -0.5,  0.5, 0.0);
+	indicies := $(cast(u32)  
+					0, 1, 2, 
+					2, 3, 0);
+
+	globals.square_vertices.data = cast(*v3)positions;
+	globals.square_vertices.len  = positions.len;
+
+	globals.indicies.data = indicies;
+	globals.indicies.len  = indicies.len;
+
+
+	player  := InstantiateEnt();
+	wall    := InstantiateEnt();
+	trigger := InstantiateEnt();
+	enemy   := InstantiateEnt();
+	ceiling := InstantiateEnt();
+
+	enemy.id = ENT_ID_ENEMY;
+
+	wall.flags = wall.flags | ENT_FLAGS_STATIC;
+	wall.id    = 6;
+
+	trigger.flags = trigger.flags | (ENT_FLAGS_TRIGGER | ENT_FLAGS_STATIC | ENT_FLAGS_INACTIVE | ENT_FLAGS_HAS_COL_CALLBACK);
+	trigger.id = ENT_ID_PLAYER_TRIGGER;
+	trigger.scale.x = 0.5;
+	trigger.scale.y = 2.0;
+	trigger.col_callback = &TriggerColCallBack;
+
+	player.id = ENT_ID_PLAYER;
+	player.forward.x = 1.0;
+	player.pos.x = 1.2;
+	player.mesh.color.x = 0.6;
+	player.flags = ENT_FLAGS_HAS_COL_CALLBACK;
+	player.col_callback = &PlayerColCallBack;
+
+
+	gmp := sys_new(sub_system_enum.MISC, gameplay_strct);
+	player.data = cast(*void)gmp;
+
+	gmp.jmp_speed = 20.0;
+	gmp.jmp_timer.time  = 0.5;
+
+	gmp.gravity_timer.time   = 0.2;
+	gmp.gravity_timer.times  = 1;
+
+	gmp.attack_timer.time   = 0.2;
+
+	gmp.attack_ent = trigger;
+
+
+	glfwSetKeyCallback(wnd, &KeyCallback);
+	glfwSetJoystickCallback(&JoystickCallback);
+
+	r   := 0.0;
+	inc := 0.05;
+
+	dt :f32= 0.0;
+	last_timer :f32= 0.0;
+	timer      :f32= 0.0;
+
+	ceiling.scale.x = 8.0;
+	ceiling.scale.y = 4.5;
+	ceiling.pos.y   = 5.0;
+
+	wall.scale.x = 16.0;
+	wall.scale.y = 4.5;
+	wall.pos.y   = -3.0;
+
+
+	while !glfwWindowShouldClose(wnd)
+	{
+		dt = timer - last_timer;
+
+		ProcessJoyInput();
+
+		glClear(GL_COLOR_BUFFER_BIT);
+
+		UpdateSeqMan(&seq_man, dt);
+		
+		PlayerMov(player, &dt);
+
+		//dt = 0.019;
+		UpdatePhysics(dt);
+
+
+		DrawEnts();
+
+
+		//GL_CALL(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nil));
+
+		ClearJoyStick();
+
+		globals.sub_systems[cast(u64)sub_system_enum.TEMPORARY].used = 0;
+		glfwSwapBuffers(wnd);
+		glfwPollEvents();
+		last_timer = timer;
+		timer      = cast(f32)glfwGetTime();
+	}
+	
+	glfwTerminate();
+	return 0;
+}

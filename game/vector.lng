@@ -1,0 +1,85 @@
+import "Core/std.lng";
+import "Core/crt.lng";
+
+v4 : struct
+{
+	x : f32,
+	y : f32,
+	z : f32,
+	w : f32,
+}
+v3 : struct
+{
+	x : f32,
+	y : f32,
+	z : f32,
+}
+PrintF100X::fn(f :f32)
+{
+	aux := cast(s32)(f * 100.0);
+	print("% ", aux);
+}
+PrintV3::fn(v : *v3)
+{
+	print("x: ");
+	PrintF100X(v.x);
+
+	print("y: ");
+	PrintF100X(v.y);
+
+	print("z: ");
+	PrintF100X(v.z);
+	print("\n");
+}
+ASSIGN_V3::fn macro(dst : _expr, a : _expr)
+{
+	dst.x = a.x;
+	dst.y = a.y;
+	dst.z = a.z;
+
+}
+DOT_V3::fn macro(dst : _expr, a : _expr, b : _expr)
+{
+	
+	dst = a.x * b.x + a.y * b.y + a.z * b.z;
+}
+MUL_V3::fn macro(dst : _expr, a : _expr, b : _expr)
+{
+	dst.x = a.x * b.x;
+	dst.y = a.y * b.y;
+	dst.z = a.z * b.z;
+}
+MUL_V3_F32::fn macro(dst : _expr, a : _expr, b : _expr)
+{
+	dst.x = a.x * b;
+	dst.y = a.y * b;
+	dst.z = a.z * b;
+}
+SUB_V3::fn macro(dst : _expr, a : _expr, b : _expr)
+{
+	dst.x = a.x - b.x;
+	dst.y = a.y - b.y;
+	dst.z = a.z - b.z;
+}
+SUM_V3::fn macro(dst : _expr, a : _expr, b : _expr)
+{
+	dst.x = a.x + b.x;
+	dst.y = a.y + b.y;
+	dst.z = a.z + b.z;
+}
+v3Length::fn(v : *v3) ! f32
+{
+	mul :f32;
+	DOT_V3(mul, v, v);
+	return sqrtf(mul);
+}
+v3Normalize::fn(v : *v3) ! v3
+{
+	ret:v3;
+	len := v3Length(v);
+	ret.x = v.x/len;
+	ret.y = v.y/len;
+	ret.z = v.z/len;
+
+	return ret;
+}

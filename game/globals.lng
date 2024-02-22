@@ -1,0 +1,185 @@
+import "Core/std.lng";
+import "Core/crt.lng";
+import "entity.lng";
+import "vector.lng";
+import "Core/win32.lng";
+import "collision.lng";
+import "input.lng";
+
+cam_size   :f32;
+screen_ratio :f32;
+
+ASSERT::fn macro(cond : _expr)
+{
+	if !(cond)
+	{
+		print("Assertion failed: %(%) %\n", __CALL_SITE_SRC_FILE, __CALL_SITE_LN_NUM, __CALL_SITE_SRC_LINE);
+		__dbg_break;
+	}
+}
+
+BUTTON_DOWN :const s32= 1;
+BUTTON_UP   :const s32= 2;
+BUTTON_PRESSED :const s32= 4;
+
+TOTAL_BUTTONS :const s32= 16;
+
+joystick : struct
+{
+	axes    : [16]f32,
+	buttons : [TOTAL_BUTTONS]u8,
+	hats    : [16]u8,
+}
+
+globals_st : struct
+{
+	keys : [256]u8,
+	square_vertices :[]v3;
+	indicies :[]u32;
+
+	sub_systems : []sub_system,
+
+	jstick : joystick,
+
+	main_buffer : *u8;
+
+	sequences :[]sequence,
+
+	collided_once : u32,
+}
+
+globals : globals_st;
+
+entity_man : struct
+{
+	entities : []entity,
+	instantiated : u64,
+	max_ents : u64,
+}
+
+ent_man : entity_man;
+
+sys_new:: fn macro(sys:_expr, tp : _expr)
+{
+	cast(*tp)GetSubSysData(sys, sizeof(tp))
+}
+
+sub_system_enum : enum
+{
+	TEMPORARY,
+	ENTITIES,
+	SEQUENCES,
+	MISC,
+}
+sub_system : struct
+{
+	data : *u8,
+	max  : u64,
+	used : u64,
+}
+DrawEnts::fn()
+{
+	i :u64;
+	while i < ent_man.instantiated
+	{
+		e := ent_man.entities[i];
+		if (e.flags & ENT_FLAGS_INACTIVE) == 0
+		{
+			DrawEnt(e);
+		}
+
+		i += 1;
+	}
+}
+UpdatePhysics::fn(dt : f32)
+{
+	e_slice := ent_man.entities[0..ent_man.instantiated];
+
+
+	i :u64;
+
+	for e : e_slice
+	{
+		
+		if (e.flags&ENT_FLAGS_STATIC)!=0 || (e.flags & ENT_FLAGS_INACTIVE) != 0
+			continue;
+
+
+		e.col.flags = e.col.flags & ~COL_FLAGS_HAD_COLLISION;
+
+		step :u64;
+		step_frac := 1.0 / 4.0;
+		collided:= false;
+	
+		last_normal :v3;
+
+		collided_ent :*entity;
+
+		while step < 4
+		{
+			e.pos.x += (e.vel.x * step_frac) * dt;
+			e.pos.y += (e.vel.y * step_frac) * dt;
+
+			for e2 : e_slice
+			{
+				if e==e2 || (e2.flags & ENT_FLAGS_INACTIVE) != 0 continue;
+
+				if AreTwoEntsColliding(e, e2, dt, step_frac, &last_normal)
+				{
+					collided = true;
+					collided_ent = e2;
+				}
+			}
+			step += 1;
+		}
+		e.flags = e.flags & ~ENT_FLAGS_ON_GROUND_SET_ON_THIS_FRAME;
+
+		if !collided
+			e.col.flags = e.col.flags & ~COL_FLAGS_ON_GROUND;
+
+		i += 1;
+	}
+}
+SUB_SYS_SZ :const s32= 1024 * 1024;
+
+DiminishSubSysData :: fn(e : sub_system_enum, sz : u64)
+{
+	sub_sys := globals.sub_systems[cast(u64)e];
+	sub_sys.used -= sz;
+
+}
+GetSubSysData :: fn(e : sub_system_enum, sz : u64) ! *u8
+{
+	sub_sys := globals.sub_systems[cast(u64)e];
+
+	ASSERT(sub_sys.used < sub_sys.max);
+
+	start :u64= cast(u64)sub_sys.data;
+
+	start += sub_sys.used;
+
+	sub_sys.used += sz;
+
+	return cast(*u8)start;
+}
+InitSubSystems::fn()
+{
+	
+	e_count :u64= enum_count(sub_system_enum);
+	globals.main_buffer = VirtualAlloc(nil, SUB_SYS_SZ * (e_count + 1), MEM_COMMIT, PAGE_EXECUTE_READWRITE);
+
+	globals.sub_systems.data = cast(*sub_system)globals.main_buffer;
+	globals.sub_systems.len  = e_count;
+
+	i:u64= 0; 
+
+	while i < e_count
+	{
+		sys := globals.sub_systems[i];
+		sys.max  = SUB_SYS_SZ;
+		sys.data = ptr_offset(globals.main_buffer, (i + 1) * SUB_SYS_SZ, u8);
+		sys.used = 0;
+		i+=1;
+	}
+}
+

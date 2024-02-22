@@ -1,0 +1,1004 @@
+import "Core/std.lng";
+import "Core/crt.lng";
+import "Core/math.lng";
+import "vector.lng";
+
+b_st : struct
+{
+ 	a : u32,
+	b : u32,
+}
+float_st : struct
+{
+	pos : v3,
+}
+operator ==(self : *b_st, rhs : u32) ! bool
+{
+	return self.a == rhs; 
+}
+operator ==(self : *b_st, rhs : *b_st) ! bool
+{
+	return self.a == rhs.a;
+}
+modify_v3_strct ::fn(a : *float_st)
+{
+	a.pos.x = 1.0;
+}
+
+big_call::fn (a : s32, b : s32, c : s32, d : s32, e : s32, f : s32) !s32
+{
+	return f;
+}
+
+using_with_ptr::fn(b_ : *b_st)
+{
+	using b_;
+	a = 2;
+	b = 3;
+}
+
+ret_strct :: fn(a : u32, b : u32) ! b_st
+{
+	ret : b_st;
+	ret.a = a;
+	ret.b = b;
+
+	return ret;
+}
+
+a_st : struct
+{
+	ptr : *u32,
+}
+c_st : struct
+{
+	field1 : b_st,
+	field2 : b_st,
+}
+modify_c_st::fn(st : *c_st)
+{
+	using st;
+	field1.a = 1;
+	field1.b = 2;
+	field2.a = 3;
+	field2.b = 4;
+}
+
+call_test::fn(out : *u32)
+{
+	*out = 1;
+}
+call_test_dbl_ptr::fn(out : **u32)
+{
+	**out = 10;
+}
+
+new_for_rel_ar:: fn{T, U}(self : *rel_array(T, U)) ! iterator(U)
+{
+	ret_it : iterator(U);
+	ret_it.start = *self.data;
+	ret_it.end   = cast(*U)(cast(u64)*self.data + cast(u64)(self.len * sizeof(U)));
+	return ret_it;
+}
+sum_args::fn(a : u64, b : u64, c : u64) ! u64
+{
+	return a + b + c;
+}
+switch_like::fn(val :u8) ! u32
+{
+	if val == 1
+	{
+		return val + 1;
+	}
+	else if val == 2
+	{
+		return val + 1;
+	}
+	else if val == 3
+	{
+		return val + 1;
+	}
+	return 16;
+}
+
+func_sum :: fn (val : u32) ! u32
+{
+	return val + 1;
+}
+func_ptr :: fn(ptr : fn(u32) ! u32) ! u32
+{
+	return ptr(1);
+}
+
+
+macro_test :: fn macro(a : _expr)
+{
+	val = 6;
+	if val != 6
+	{
+		*ret = 0;
+		return i;
+	}
+	a
+}
+ret_v3_ptr::fn(v : *v3) ! *v3
+{
+	return v;
+}
+func_call_test :: fn test(ret : *u8) ! s32
+{
+	i :s32= 1;
+	
+	// test 1, basic assigment and sign
+	if i != 1
+	{
+		*ret = 0;
+		return i;
+	}
+
+	a_bool := true;
+	if a_bool != true
+	{
+		*ret = 0;
+		return i;
+	}
+	a_bool = false;
+	if a_bool != false
+	{
+		*ret = 0;
+		return i;
+	}
+
+	negative_number :s32= -1;
+	casted := cast(s64)negative_number;
+	if casted != -1
+	{
+		*ret = 0;
+		return 90;
+	}
+
+	// negating the number
+	negative_number = ~1;
+	if negative_number != -2
+	{
+		*ret = 0;
+		return i;
+	}
+	
+	// going from 0x..fe to 0x..01
+	negative_number = ~negative_number;
+	if negative_number != 1
+	{
+		*ret = 0;
+		return i;
+	}
+
+
+	arg_e := big_call(1, 2, 3, 4, 5, 6);
+	if arg_e != 6
+	{
+		*ret = 0;
+		return i;
+	}
+
+	aux :u32= 0;
+	*cast(*u8)(cast(u64)&aux + 1) = 1;
+
+	if aux != 0x100
+	{
+		*ret = 0;
+		return i;
+	}
+
+	f_ret := sum_args(1, 2, sum_args(1, 2, 3));
+	
+	if f_ret != 9
+	{
+		*ret = 0;
+		return i;
+	}
+
+	// testing if unsigned between different sizes work
+	u64_var :u64= 0;
+	*cast(*u32)(cast(u64)&u64_var + 4) = 1;
+
+	u32_var :u32= 0;
+	u64_var = u32_var;
+	
+
+	if u64_var != 0
+	{
+		*ret = 0;
+		return i;
+	}
+
+
+	float_var :f32;
+
+	*cast(*u32)&float_var = 0x1;
+	
+	val := switch_like(1);
+	if val != 2
+	{
+		*ret = 0;
+		return i;
+	}
+
+	val = switch_like(2);
+	if val != 3
+	{
+		*ret = 0;
+		return i;
+	}
+	val = switch_like(3);
+	if val != 4
+	{
+		*ret = 0;
+		return i;
+	}
+	val = func_ptr(&func_sum);
+
+	if val != 2
+	{
+		*ret = 0;
+		return i;
+	}
+
+
+	macro_test(val = 5);
+	if val != 5
+	{
+		*ret = 0;
+		return i;
+	}
+
+	b_val := val == 5;
+
+	if b_val != true
+	{
+		*ret = 0;
+		return i;
+	}
+
+	b_val = is_letter('{);
+
+	if b_val == true
+	{
+		*ret = 0;
+		return i;
+	}
+
+	b_val = is_letter('a);
+
+	if b_val != true
+	{
+		*ret = 0;
+		return i;
+	}
+
+	b_val = is_letter('z);
+
+	if b_val != true
+	{
+		*ret = 0;
+		return i;
+	}
+
+	b_val = is_letter('A);
+
+	if b_val != true
+	{
+		*ret = 0;
+		return i;
+	}
+
+	b_val = is_letter('Z);
+
+	if b_val != true
+	{
+		*ret = 0;
+		return i;
+	}
+
+
+	val = 3;
+	val = val & 1;
+	if val != 1
+	{
+		*ret = 0;
+		return i;
+	}
+	
+	if (val & 1) != 1
+	{
+		*ret = 0;
+		return i;
+	}
+
+	float_val :f32= 1.0;
+
+	if float_val < 0.0
+	{
+		*ret = 0;
+		return i;
+	}
+
+	val = 2;
+	val = val | 1;
+
+	if val != 3
+	{
+		*ret = 0;
+		return i;
+	}
+
+	val = 2;
+	aux = 1;
+
+	val = val | aux;
+	if val != 3
+	{
+		*ret = 0;
+		return i;
+	}
+
+	
+	
+	//
+	// test 2, big loop
+	//
+	aux = 0;
+	i = 2;
+	while aux < 100000
+	{
+		aux += 1;
+	}
+	if aux != 100000 
+	{
+		*ret = 0;
+		return i;
+	}
+
+	aux_neg := -4;
+
+	while aux_neg
+	{
+		aux_neg += 1;
+	}
+	
+	if aux_neg != 0
+	{
+		*ret = 0;
+		return i;
+	}
+
+
+	//
+	// test 3, ptr deref assignment inside func
+	//
+	i = 3;
+	
+	call_test(&aux);
+	if aux != 1
+	{
+		*ret = 0;
+		return 90;
+	}
+
+	//
+	// test 4, double ptr
+	//
+	i = 4;
+	ptr := &aux;
+	call_test_dbl_ptr(&ptr);
+	if aux != 10
+	{
+		*ret = 0;
+		return i;
+	}
+	if &*ptr != ptr
+	{
+		*ret = 0;
+		return i;
+	}
+
+	f_strct : float_st;
+	modify_v3_strct(&f_strct);
+
+	if f_strct.pos.x > 1.1 || f_strct.pos.x < 0.9
+	{
+		*ret = 0;
+		return i;
+	}
+
+	//
+	// test 5, cast ptr
+	//
+	i = 5;
+
+	aux = 1;
+	new_ptr := cast(*u16)(cast(u64)&aux + 2);
+	*new_ptr = 2;
+
+	if *new_ptr != 2 || aux != 0x00020001
+	{
+		*ret = 0;
+		return i;
+	}
+	
+	aux_neg = -1;
+	aux_neg_ptr := &aux_neg;
+	if cast(s32)
+	(*cast(*s8)aux_neg_ptr) != -1
+	{
+		*ret = 0;
+		return i;
+	}
+
+	//
+	// test 6, point operator
+	//
+
+	i = 6;
+
+	a : a_st;
+	a.ptr = &aux;
+	*a.ptr = 2;
+
+
+	a_ptr :*a_st= &a;
+	*a_ptr.ptr = 3;
+
+	if aux != 3 || *a_ptr.ptr != 3
+	{
+		*ret = 0;
+		return i;
+	}
+
+	buffer_test :[16]char;
+	buffer_ptr := cast(*u32)buffer_test;
+	*buffer_ptr = cast(u32)'0;
+
+	if *buffer_test[0] != '0
+	{
+		*ret = 0;
+		return i;
+	}
+
+	//
+	// test 7, struct val ret
+	//
+	
+	i = 7;
+
+	b_strct := ret_strct(1, 2);
+	if b_strct.a != 1 || b_strct.b != 2
+	{
+		*ret = 0;
+		return i;
+	}
+
+	using_with_ptr(&b_strct);
+
+	if b_strct.a != 2 || b_strct.b != 3
+	{
+		*ret = 0;
+		return i;
+	}
+
+	c_strct : c_st;
+	modify_c_st(&c_strct);
+
+	if c_strct.field1.a != 1 
+		|| c_strct.field1.b != 2 
+		|| c_strct.field2.a != 3
+		|| c_strct.field2.b != 4
+	{
+		*ret = 0;
+		return i;
+	}
+
+	//
+	// test 8, builtin desugar stuff1
+	//
+	
+	{
+		i = 8;
+		
+		ar_lit := $(cast(u32)1, 2, 3);
+
+		ar := ar_lit[..];
+
+		if ar[0] != ar.data
+		{
+			*ret = 0;
+			return i;
+		}
+
+		lit_char := $('a, 'a, 'a);
+
+		ar_char := lit_char[..];
+
+		if ar_char[0] != lit_char
+		{
+			*ret = 0;
+			return i;
+		}
+	}
+
+	//
+	// test 9, builtin desugar stuff2
+	//
+	
+	i = 9;
+	
+	ar_lit := $(cast(u32)1, 2, 3);
+
+	ar := ar_lit[..];
+
+
+	itr :iterator(u32);
+	it_init(&itr, &ar);
+
+	if itr.start != ar[0] || itr.end != ar[3]
+	{
+		*ret = 0;
+		return i;
+	}
+
+	if it_next(&itr) != ar[0]
+	{
+		*ret = 0;
+		return i;
+	}
+	if it_next(&itr) != ar[1]
+	{
+		*ret = 0;
+		return i;
+	}
+	if it_next(&itr) != ar[2]
+	{
+		*ret = 0;
+		return i;
+	}
+	if it_next(&itr) != nil
+	{
+		*ret = 0;
+		return i;
+	}
+
+
+	// testing slice addresses with the array literal that
+	// it was derived from
+
+	ar_lit2 := $(cast(u32)1, 2, 3, 4, 5);
+	ar_2 := ar_lit2[1..];
+
+	if ar_2[0] != ar_lit2[1]
+	{
+		*ret = 0;
+		return i;
+	}
+
+	ar_2 = ar_lit2[1..2];
+
+	if *ar_2[0] != 2
+	{
+		*ret = 0;
+		return i;
+	}
+
+	//
+	// test 10, builtin desugar stuff3
+	//
+	
+	i = 10;
+
+	sum :u32= 0;
+
+	// ar is slice from ar_lit := $(cast(u32)1, 2, 3);
+	for b : ar
+	{
+		sum += *b;
+	}
+
+	if sum != 6
+	{
+		*ret = 0;
+		return i;
+	}
+
+
+	//
+	// test 11, builtin rel_ptr
+	//
+	
+	i = 11;
+
+	aux = 0;
+	r_ptr :rel_ptr(s32, u32)= &aux;
+
+	if *r_ptr != &aux
+	{
+		*ret = 0;
+		return i;
+	}
+
+	if **r_ptr != 0
+	{
+		*ret = 0;
+		return i;
+	}
+
+	//
+	// test 12, printing stuff
+	//
+	
+	i = 12;
+
+	rel_arr : rel_array(s32, u32);
+
+	aux = 9;
+	
+	rel_arr.data = &aux;
+
+	if *rel_arr.data != &aux
+	{
+		*ret = 0;
+		return i;
+	}
+
+	if *rel_arr[0] != aux
+	{
+		*ret = 0;
+		return i;
+	}
+
+	*rel_arr[0] = 3;
+
+	if aux != 3
+	{
+		*ret = 0;
+		return i;
+	}
+
+	ret_1 := check_var_arg_value_5(5);
+
+	if ret_1 != 1
+	{
+		*ret = 0;
+		return i;
+	}
+
+	ret_1 = check_var_arg_typeS32(5);
+
+	if ret_1 != 1
+	{
+		*ret = 0;
+		return i;
+	}
+
+	ret_1 = check_var_arg_typeSTRLIT(5);
+
+	if ret_1 != 1
+	{
+		*ret = 0;
+		return i;
+	}
+
+	ret_1 = check_var_arg_sum(5, 6);
+
+	if ret_1 != 1
+	{
+		*ret = 0;
+		return 78;
+	}
+	ret_1 = cast(u8)check_var_arg_defined_arg(1, 2);
+
+	if ret_1 != 3
+	{
+		*ret = 0;
+		return i;
+	}
+	//
+	// test 13, more comples test
+	//
+	i = 13;
+	
+	{
+		b1 := $('1, '2, 'a, 'a);
+		ar_char := b1[..];
+
+		if *ar_char[0] != '1
+		{
+			*ret = 0;
+			return i;
+		}
+
+		modify_buffer(&ar_char, '2, '3);
+
+		if *ar_char[1] != '3
+		{
+			*ret = 0;
+			return i;
+		}
+
+		written := num_2_str(56, cast(*array(u8))&ar_char);
+
+		if written != 2
+		{
+			*ret = 0;
+			return i;
+		}
+
+
+		idx_ :u64= 0;
+
+		if *ar_char[idx_] != '6 || *ar_char [idx_ + 1] != '5
+		{
+			*ret = 0;
+			return i;
+		}
+
+		written = num_2_str_signed(-10, cast(*array(u8))&ar_char, 4);
+		if written != 2
+		{
+			*ret = 0;
+			return cast(s32)written;
+		}
+		if *ar_char[idx_] != '- || *ar_char [idx_ + 1] != '9
+		{
+			*ret = 0;
+			return i;
+		}
+
+		written = num_2_str_signed(10, cast(*array(u8))&ar_char, 4);
+		if written != 2
+		{
+			*ret = 0;
+			return cast(s32)written;
+		}
+		if *ar_char[idx_] != '1 || *ar_char [idx_ + 1] != '0
+		{
+			*ret = 0;
+			return i;
+		}
+
+
+
+		written = num_2_strX(16, cast(*array(u8))&ar_char);
+		// ar_char will be 0x10
+
+		if written != 4
+		{
+			*ret = 0;
+			return i;
+		}
+
+		if *ar_char[2] != '1 || *ar_char[3] != '0
+		{
+			*ret = 0;
+			return i;
+		}
+
+		idx    :u64= 1;
+		ar_len :u64= 2;
+
+		test_val := *ar_char[(idx + 1) % ar_len];
+
+		if test_val != '0
+		{
+			*ret = 0;
+			return i;
+		}
+		
+		idx = 2;
+		test_val = *ar_char[(idx + 1) % ar_len];
+
+		if test_val != 'x
+		{
+			*ret = 0;
+			return i;
+		}
+	}
+
+	{
+		bool_val := b_strct == b_strct;
+
+		if !bool_val
+		{
+			*ret = 0;
+			return i;
+		}
+
+		b_strct.a = 2;
+		bool_val = b_strct == cast(u32)2;
+
+		if !bool_val
+		{
+			*ret = 0;
+			return i;
+		}
+
+		str1 :string;
+		str2 :string;
+
+		// str "Hello"
+
+		arr_hello := $(cast(u8)0x48, 0x65, 0x6C, 0x6C, 0x6F);
+
+		str1.data = arr_hello;
+		str1.len  = arr_hello.len;
+		
+		bool_val = str1 == str1;
+
+		if !bool_val
+		{
+			*ret = 0;
+			return i;
+		}
+
+		// 15
+		*arr_hello[0] = '1;
+		*arr_hello[1] = '2;
+		
+		i_val :=str_2_num(&arr_hello[..2]);
+
+		if i_val != 12
+		{
+			*ret = 0;
+			return i;
+		}
+	}
+	//
+	// test 14, math stuff
+	//
+	i = 14;
+
+	dir1:v3;
+	dir2:v3;
+
+	dot:f32;
+
+	dir1.x = 0.0;
+	dir1.y = 1.0;
+
+	dir2.x = 0.0;
+	dir2.y = -1.2;
+
+	DOT_V3(dot, dir1, dir2);
+
+	// dot should be 1.2~
+	// so we're testing if it is not between the epsilon
+	if dot < -1.21 || dot > -1.19
+	{
+		*ret = 0;
+		return i;
+	}
+
+	min_f := Minf(0.1, 0.2);
+
+	if min_f > 0.1
+	{
+		*ret = 0;
+		return i;
+	}
+
+	aux_f1 := 0.2;
+	aux_f2 := 0.4;
+
+	// should return 0.1
+	min_f = Minf(aux_f2 - aux_f1, aux_f1 - min_f);
+
+	if min_f > 0.1
+	{
+		*ret = 0;
+		return i;
+	}
+
+	dir1.x = 1.0;
+	dir1.y = 1.0;
+
+	MUL_V3_F32(dir1, dir1, -1.0);
+
+	if dir1.x > -0.9 || dir1.y > -0.9
+	{
+		*ret = 0;
+		return i;
+	}
+
+	dir1.x = 2.6;
+
+	val_from_f := cast(s32)dir1.x;
+
+	if val_from_f > 2
+	{
+		*ret = 0;
+		return i;
+	}
+
+	aux_f1 = 2.0;
+
+	aux_f1 = aux_f1 * (aux_f1 * aux_f1);
+
+	if aux_f1 > 8.1
+	{
+		*ret = 0;
+		return i;
+	}
+
+
+	*ret = 1;
+	return i;
+}
+check_var_arg_defined_arg::fn(a : u32, ...) !u32
+{
+	ar := cast(*rel_array(s64, *var_arg)) GET_VAR_ARGS_OFFSET();
+	
+
+	return cast(u32)ar[0].val + a;
+}
+modify_buffer :: fn(buffer : *[]char, ch : char, val : char)
+{
+	i :u64= 0;
+
+	while i < buffer.len
+	{
+		if *buffer[i] == ch
+			*buffer[i] = val;
+		i += 1;
+	}
+
+
+}
+check_var_arg_sum::fn(...) !u8
+{
+	ar := cast(*rel_array(s64, *var_arg)) GET_VAR_ARGS_OFFSET();
+	
+	sum := 0;
+
+	for a : *ar
+	{
+		sum += cast(s32)a.val;
+	}
+	
+	if sum != 11
+		return 0;
+
+	return 1;
+}
+check_var_arg_typeSTRLIT::fn(...) !u8
+{
+	ar := cast(*rel_array(s64, *var_arg)) GET_VAR_ARGS_OFFSET();
+	tdata:type_data;
+	tdata.tp = str_lit;
+	(*ar)[0].tdata = &tdata;
+
+
+	if (*ar)[0].tdata.tp != str_lit
+		return 0;
+
+	return 1;
+}
+check_var_arg_typeS32::fn(...) !u8
+{
+	ar := cast(*rel_array(s64, *var_arg)) GET_VAR_ARGS_OFFSET();
+	tdata:type_data;
+	tdata.tp = s32;
+	(*ar)[0].tdata = &tdata;
+
+
+	if (*ar)[0].tdata.tp != s32
+		return 0;
+
+	return 1;
+}
+check_var_arg_value_5::fn(...) !u8
+{
+	ar := cast(*rel_array(s64, *var_arg)) GET_VAR_ARGS_OFFSET();
+
+	if (*ar)[0].val != 5
+		return 0;
+
+	return 1;
+}

@@ -1,0 +1,381 @@
+import "vector.lng";
+import "Core/std.lng";
+import "Core/gl.lng";
+import "Core/glfw.lng";
+import "Core/glew.lng";
+import "Core/crt.lng";
+import "collision.lng";
+import "globals.lng";
+import "main.lng";
+import "input.lng";
+
+GLClearError :: fn()
+{
+	while err := glGetError(){}
+}
+GLCheckError :: fn() ! bool
+{
+	no_error := true;
+	while err := glGetError()
+	{
+		no_error = false;
+		print("\nGl Error:%x\n", err);
+		__dbg_break;
+	}
+
+	return no_error;
+}
+
+GL_CALL::fn macro(call : _expr)
+{
+	GLClearError();
+	call;
+	GLCheckError();
+}
+shader : struct
+{
+	id : u32,
+}
+
+gl_layout : struct
+{
+	idx  : u32,
+	size : u32,
+	stride : u32,
+}
+gl_buffers : struct
+{
+	ibo       : u32,
+	idx_data  : *u32,
+	idx_count : *u32,
+
+	buffer : u32,
+	layout : gl_layout,
+	shdr : shader,
+
+	color : v4,
+
+	vertices : []v3,
+}
+
+ENT_FLAGS_STATIC:const s32= 0x1;
+ENT_FLAGS_HAS_COL_CALLBACK:const s32= 0x2;
+ENT_FLAGS_INACTIVE:const s32= 0x4;
+ENT_FLAGS_TRIGGER:const s32= 0x8;
+ENT_FLAGS_ON_GROUND_SET_ON_THIS_FRAME:const s32= 0x10;
+
+COL_FLAGS_ON_GROUND:const s32= 1;
+COL_FLAGS_HAD_COLLISION:const s32= 2;
+
+collision_strct:struct
+{
+	normal : v3,
+	flags  : u64,
+}
+
+
+player_state : enum
+{
+	IDLE,
+	WALKING,
+	JUMPING,
+}
+timer_limit : struct
+{
+	timer : f32,
+	time  : f32,
+	cur_idx : u32,
+	times   : u32,
+}
+UpdateTimerGetPercent::fn(timer : *timer_limit, dt : f32, p : *f32) ! bool 
+{
+	if timer.times == 0
+	{
+		timer.timer += dt;
+
+		if timer.timer >= timer.time
+		{
+			timer.timer = 0.0;
+			return false;
+		}
+	}
+	else if timer.cur_idx < timer.times
+	{
+		timer.timer += dt;
+
+		if timer.timer >= timer.time
+		{
+			timer.cur_idx += 1;
+			timer.timer = 0.0;
+			return false;
+		}
+
+	}
+	else
+		return false;
+
+	*p = timer.timer / timer.time;
+
+	return true;
+}
+gameplay_strct : struct
+{
+	state : player_state,
+
+	attack_ent : *entity,
+
+	is_jumping  :bool,
+	is_attacking:bool,
+	jmp_speed : f32,
+	jmp_timer : timer_limit,
+
+	gravity_timer : timer_limit,
+	attack_timer : timer_limit,
+
+	gravity :v3;
+
+	time_off_the_ground : f32,
+}
+
+ENT_ID_PLAYER_TRIGGER:const s32= 1;
+ENT_ID_ENEMY_TRIGGER:const s32= 2;
+ENT_ID_PLAYER:const s32= 3;
+ENT_ID_ENEMY:const s32= 4;
+entity : struct
+{
+	id : u32,
+	pos   : v3,
+	vel   : v3,
+	scale : v3,
+	flags : u64,
+
+	forward : v3,
+
+	mesh : gl_buffers,
+
+	col_callback:fn(*entity, *entity, *v3),
+
+	data : *void,
+
+	model_mat : [4]v4;
+
+	col : collision_strct,
+}
+
+TriggerColCallBack::fn(ent_a : *entity, other : *entity, normal : *v3)
+{
+	if ent_a.id == ENT_ID_PLAYER_TRIGGER && other.id != ENT_ID_PLAYER
+	{
+		if other.id == ENT_ID_ENEMY
+		{
+		}
+	}
+}
+PlayerColCallBack::fn(player : *entity, other : *entity, normal : *v3)
+{
+	memcpy(cast(*void)&player.col.normal, cast(*void)normal, sizeof(v3));
+
+	gmp := cast(*gameplay_strct)player.data;
+	
+	if (player.flags & ENT_FLAGS_ON_GROUND_SET_ON_THIS_FRAME) == 0
+	{
+		// stoping jumps when are ceilings
+		if normal.y < -0.1
+		{
+			player.col.flags = player.col.flags & ~COL_FLAGS_ON_GROUND;
+			gmp.is_jumping = false;
+		}
+
+		if normal.y > 0.01
+		{
+			player.col.flags = player.col.flags | COL_FLAGS_ON_GROUND;
+		}
+
+		player.flags = player.flags | ENT_FLAGS_ON_GROUND_SET_ON_THIS_FRAME;
+
+	}
+
+}
+
+CompileShader :: fn(src : *u8, type : u32) ! u32
+{
+	id := glCreateShader(type);
+	GL_CALL(glShaderSource(id, 1, &src, nil));
+	GL_CALL(glCompileShader(id));
+
+
+	result :u32;
+	glGetShaderiv(id, GL_COMPILE_STATUS, &result);
+
+	if result == 0
+	{
+		length :u32;
+		glGetShaderiv(id, GL_COMPILE_STATUS, &length);
+		
+		buffer := malloc(length);
+		
+		glGetShaderInfoLog(id, length, &length, buffer);
+		print("Gl: failed to compile shader\n %", buffer);
+
+		free(buffer);
+	
+	}
+	return id;
+}
+CreateBasicShader ::fn(vs_src : []u8, fs_src : []u8) ! u32
+{
+	prog := glCreateProgram();
+	vs := CompileShader(vs_src.data, GL_VERTEX_SHADER);
+	fs := CompileShader(fs_src.data, GL_FRAGMENT_SHADER);
+
+	GL_CALL(glAttachShader(prog, vs));
+	GL_CALL(glAttachShader(prog, fs));
+
+	GL_CALL(glLinkProgram(prog));
+	GL_CALL(glValidateProgram(prog));
+
+	GL_CALL(glDeleteShader(vs));
+	GL_CALL(glDeleteShader(fs));
+
+	return prog;
+}
+CreateShader::fn(self : *shader)
+{
+	using self;
+
+	vs := "
+	#version 330 core
+	layout(location = 0) in vec4 position;
+
+	uniform mat4 u_Model;
+
+	void main()
+	{
+		gl_Position = u_Model * position;
+	}";
+
+	fs := "
+	#version 330 core
+	layout(location = 0) out vec4 color;
+	uniform vec4 u_Color;
+
+	void main()
+	{
+		color = u_Color;
+	}";
+
+	id = CreateBasicShader(vs, fs);
+
+	GL_CALL(glUseProgram(id));
+}
+BindShader::fn(self : *shader)
+{
+	GL_CALL(glUseProgram(self.id));
+}
+
+DrawEnt::fn(ent : *entity)
+{
+	using ent;
+	BindMesh(&mesh);
+	BindShader(&mesh.shdr);
+
+	GL_CALL(location := glGetUniformLocation(mesh.shdr.id, "u_Color"));
+	GL_CALL(glUniform4f(location, ent.mesh.color.x, 0.3, 0.8, 0.1));
+
+
+	
+	
+	_model_mat := $((1.0 * ent.scale.x) / cam_size, 0.0, 0.0, 0.0,
+					0.0, (1.0 * ent.scale.y) / cam_size , 0.0, 0.0,
+					0.0, 0.0, 1.0, 0.0,
+					ent.pos.x / cam_size, ent.pos.y / cam_size, 0.0, 1.0
+					);
+
+	GL_CALL(mod_location := glGetUniformLocation(mesh.shdr.id, "u_Model"));
+	glUniformMatrix4fv(mod_location, 1, 0, _model_mat[0]);
+
+
+	GL_CALL(glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, nil));
+}
+
+BindIBuffer :: fn(b : *gl_buffers)
+{
+	GL_CALL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, b.ibo));
+}
+CreateIBuffer :: fn(b : *gl_buffers, data : *u32, sz : u32)
+{
+	using b;
+
+	GL_CALL(glGenBuffers(1, &ibo));
+	GL_CALL(glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ibo));
+	GL_CALL(glBufferData(GL_ELEMENT_ARRAY_BUFFER, sz * sizeof(u32), data, GL_STATIC_DRAW));
+}
+
+BindLayout  :: fn(b : *gl_buffers)
+{
+	using b;
+	GL_CALL(glEnableVertexAttribArray(layout.idx));
+	GL_CALL(glVertexAttribPointer(layout.idx, layout.size, GL_FLOAT, 0, layout.stride, nil));
+}
+
+CreateLayout  :: fn(b : *gl_buffers, idx : u32, sz : u32, stride : u32)
+{
+	using b;
+
+	layout.idx   = idx;
+	layout.size  = sz;
+	layout.stride = stride;
+
+	GL_CALL(glEnableVertexAttribArray(idx));
+	GL_CALL(glVertexAttribPointer(idx, sz, GL_FLOAT, 0, stride, nil));
+
+}
+NewEnt::fn() ! *entity
+{
+	ret := ent_man.entities[ent_man.instantiated];
+
+	ent_man.instantiated += 1;
+	ASSERT(ent_man.instantiated < ent_man.max_ents);
+
+	return ret;
+}
+InstantiateEnt::fn() ! *entity
+{
+	positions := globals.square_vertices.data;
+
+	indicies := globals.indicies.data;
+
+	new_ent := NewEnt();
+
+	CreateVBuffer(&new_ent.mesh, cast(*void)positions, 4 * 3 * sizeof(f32));
+	BindVBuffer(&new_ent.mesh);
+	CreateIBuffer(&new_ent.mesh, indicies, 6);
+	BindIBuffer(&new_ent.mesh);
+	CreateShader(&new_ent.mesh.shdr);
+
+	CreateLayout(&new_ent.mesh, 0, 2, sizeof(f32) * 3);
+	new_ent.scale.x = 1.0;
+	new_ent.scale.y = 1.0;
+
+	return new_ent;
+}
+
+CreateVBuffer :: fn(b : *gl_buffers, data : *void, sz : u32)
+{
+	using b;
+
+
+	GL_CALL(glGenBuffers(1, &buffer));
+	GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, buffer));
+	GL_CALL(glBufferData(GL_ARRAY_BUFFER, sz, cast(*u32)data, GL_STATIC_DRAW));
+}
+BindVBuffer :: fn(b : *gl_buffers)
+{
+	GL_CALL(glBindBuffer(GL_ARRAY_BUFFER, b.buffer));
+}
+BindMesh :: fn(mesh : *gl_buffers)
+{
+	BindVBuffer(mesh);
+	BindIBuffer(mesh);
+	BindLayout(mesh);
+}

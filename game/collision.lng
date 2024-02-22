@@ -1,0 +1,200 @@
+import "Core/std.lng";
+import "entity.lng";
+import "vector.lng";
+import "Core/crt.lng";
+import "Core/math.lng";
+import "globals.lng";
+import "main.lng";
+import "input.lng";
+
+FLOAT_MAX :const s32= 0x7f800000;
+FLOAT_MIN :const s32= 0xff800000;
+
+TransformVertices::fn(vertices : *[]v3, ent : *entity, step_frac : f32, dt : f32)
+{
+	i :u64= 0;
+
+	while i < vertices.len
+	{
+		cur := vertices[i];
+
+		MUL_V3(cur, cur, ent.scale);
+		cur.x += ent.pos.x;
+		cur.y += ent.pos.y;
+		cur.z += ent.pos.z;
+		
+		i += 1;
+	}
+}
+ProjectVertices::fn(vertices : *[]v3, axis : *v3, min : *f32, max: *f32)
+{
+	*cast(*u32)min = cast(u32)FLOAT_MAX;
+	*cast(*u32)max = cast(u32)FLOAT_MIN;
+
+	i :u64;
+	while i < vertices.len
+	{
+		v := vertices[i];
+		proj :f32;
+		DOT_V3(proj, axis, v);
+
+		if proj < *min 
+			*min = proj; 
+		if proj > *max  
+			*max = proj; 
+
+		i += 1;
+		if (i % 3) == 0
+			i += 1;
+	}
+}
+CheckVerticesSAT::fn(ent_a_vertices :*[]v3, ent_b_vertices :*[]v3, depth : *f32, normal : *v3) ! bool
+{
+	i :u64;
+	while i < ent_a_vertices.len
+	{
+		va := *ent_a_vertices[i];
+		// next vertice
+		vb := *ent_a_vertices [(i + 1) % ent_a_vertices.len];
+		
+		//va = va;
+		//vb = vb;
+
+		edge :v3;
+		SUB_V3(edge, vb, va);
+
+		axis : v3;
+		axis.x = -edge.y;
+		axis.y = edge.x;
+		//axis   = v3Normalize(&axis);
+
+		minA:f32;
+		maxA:f32;
+		minB:f32;
+		maxB:f32;
+
+		ProjectVertices(ent_a_vertices, &axis, &minA, &maxA);
+		ProjectVertices(ent_b_vertices, &axis, &minB, &maxB);
+
+		// theres is gap between the objects, so there are no collision
+		if minA >= maxB || minB >= maxA
+			return false;
+
+		axis_depth := Minf(maxB - minA, maxA - minB);
+
+
+		if axis_depth < *depth
+		{
+			*depth  = axis_depth;
+			ASSIGN_V3(normal, axis);
+		}
+
+		i += 1;
+	}
+	return true;
+}
+
+
+AreTwoEntsColliding::fn(ent_a : *entity, ent_b : *entity, dt : f32, step_frac : f32, last_normal : *v3) ! bool
+{
+	ent_a_vertices :[]v3;
+	ent_b_vertices :[]v3;
+
+
+	len :u64= 4 * 3;
+
+	a_sz := len * sizeof(f32);
+	b_sz := len * sizeof(f32);
+
+	ent_a_vertices.data = cast(*v3)GetSubSysData(sub_system_enum.TEMPORARY, a_sz);
+	ent_a_vertices.len  = 4;
+
+	ent_b_vertices.data = cast(*v3)GetSubSysData(sub_system_enum.TEMPORARY, b_sz);
+
+	
+
+	ent_b_vertices.len  = 4;
+
+	//print("ent id % inital pos was ", cast(s32)ent_a.id);
+	//PrintV3(&ent_a.pos);
+	//print("\n");
+
+	step :u64;
+
+	collided:bool= false;
+
+
+	//while step < 8 
+	//{
+
+	memcpy(cast(*void)ent_a_vertices.data, cast(*void)globals.square_vertices.data, len * sizeof(f32));
+	memcpy(cast(*void)ent_b_vertices.data, cast(*void)globals.square_vertices.data, len * sizeof(f32));
+
+	TransformVertices(&ent_b_vertices, ent_b, step_frac, dt);
+	TransformVertices(&ent_a_vertices, ent_a, step_frac, dt);
+
+
+	depth  :f32;
+	normal :v3;
+
+	*cast(*u32)&depth = cast(u32)FLOAT_MAX;
+
+	check1 := CheckVerticesSAT(&ent_a_vertices, &ent_b_vertices, &depth, &normal);
+	check2 := CheckVerticesSAT(&ent_b_vertices, &ent_a_vertices, &depth, &normal);
+
+	
+	DiminishSubSysData(sub_system_enum.TEMPORARY, a_sz);
+	DiminishSubSysData(sub_system_enum.TEMPORARY, b_sz);
+
+	if check1 && check2
+	{
+		depth = depth / v3Length(&normal);
+		normal = v3Normalize(&normal);
+
+		collided = true;
+
+		center_a:v3;
+		ASSIGN_V3(center_a, ent_a.pos);
+		center_b:v3;
+		ASSIGN_V3(center_b, ent_b.pos);
+
+		dir :v3;
+
+		SUB_V3(dir, center_b, center_a);
+
+		correct_dot:f32;
+		DOT_V3(correct_dot, dir, normal);
+
+
+		if correct_dot < 0.0
+		{
+			MUL_V3_F32(normal, normal, -1.0);
+		}
+
+
+		res_dir :v3;
+		res_dir.x = normal.x * depth;
+		res_dir.y = normal.y * depth;
+		
+		if (ent_b.flags & ENT_FLAGS_TRIGGER) == 0
+			SUB_V3(ent_a.pos, ent_a.pos, res_dir);
+
+		ASSIGN_V3(last_normal, res_dir);
+		MUL_V3_F32(last_normal, last_normal, -1.0);
+
+		ent_a.col.flags = ent_a.col.flags | COL_FLAGS_HAD_COLLISION;
+
+		if (ent_a.flags & ENT_FLAGS_HAS_COL_CALLBACK) !=0
+		{
+			norm := v3Normalize(last_normal);
+			ent_a.col_callback(ent_a, ent_b, &norm);
+		}
+
+	}
+	else
+	{
+		return false;
+	}
+
+	return true;
+}

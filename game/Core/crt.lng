@@ -1,0 +1,9 @@
+import_lib "ucrt.lib";
+
+free :: fn(*u8);
+malloc :: fn(u64) ! *u8;
+memset :: fn(*void, u64, u64) ! *u8;
+memcpy :: fn(*void, *void, u64) ! *u8;
+sqrtf  :: fn(f32) ! f32;
+pow  :: fn(f32) ! f32;
+cosf  :: fn(f32) ! f32;
